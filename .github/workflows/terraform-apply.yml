@@ -35,6 +35,17 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v4
 
+      - name: Check required secrets
+        run: |
+          if [ -z "${{ secrets.AWS_TERRAFORM_APPLY_ROLE_ARN }}" ]; then
+            echo "::error::Add Secret: AWS_TERRAFORM_APPLY_ROLE_ARN"
+            exit 1
+          fi
+          if [ "${{ inputs.notify_k8s_repo }}" = "true" ] && [ -z "${{ secrets.K8S_REPO_DISPATCH_TOKEN }}" ]; then
+            echo "::error::notify_k8s_repo is true but K8S_REPO_DISPATCH_TOKEN is empty."
+            exit 1
+          fi
+
       - name: Resolve AWS region
         id: awsregion
         env:

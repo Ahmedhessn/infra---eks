@@ -5,6 +5,22 @@ Terraform: **كلاستر EKS واحد (موحّد)** عبر AZين في `live/u
 - التطبيق: [src---eks](https://github.com/Ahmedhessn/src---eks)
 - الـ Kubernetes: [k8s---eks](https://github.com/Ahmedhessn/k8s---eks)
 
+## قبل تشغيل الـ Pipeline (تحقق سريع)
+
+| # | المطلوب | أين |
+|---|---------|-----|
+| 1 | حساب AWS صحيح + CLI/ OIDC | `aws sts get-caller-identity` |
+| 2 | **Root bucket + DynamoDB** (لـ bootstrap state) | مرة واحدة في AWS |
+| 3 | `TF_ROOT_STATE_BUCKET` ، `TF_ROOT_STATE_LOCK_TABLE` | GitHub → repo **Secrets** |
+| 4 | `AWS_TERRAFORM_APPLY_ROLE_ARN` | Secrets |
+| 5 | `AWS_TERRAFORM_PLAN_ROLE_ARN` | Secrets (لـ PR plan / تشغيل يدوي لـ **Terraform PR plan**) |
+| 6 | **Environments:** `unified` ، `dev` ، … و **`production`** للـ prod | GitHub → **Environments** |
+| 7 | (اختياري) `K8S_REPO_DISPATCH_TOKEN` إن فعّلت notify على **k8s---eks** | Secrets |
+| 8 | (اختياري) **Variables:** `AWS_REGION` ، `TF_PROJECT_PREFIX` | GitHub → **Variables** |
+
+**ترتيب التشغيل:** `Terraform bootstrap` (**unified**) → `Terraform apply` (**unified**).  
+**Plan بدون PR:** Actions → **Terraform PR plan** → **Run workflow** (يظهر الملخص في الصفحة + artifacts).
+
 ## البيئات (multi-env)
 
 | المسار | الوصف |
@@ -35,12 +51,12 @@ Terraform: **كلاستر EKS واحد (موحّد)** عبر AZين في `live/u
 
 ## GitHub Actions
 
-### 1) PR → تعليق فيه `terraform plan` (لكل بيئة)
+### 1) `terraform plan` — PR أو يدوي
 
 Workflow: `.github/workflows/terraform-pr.yml`
 
-- يولّد `backend.ci.hcl` تلقائياً من **نفس تسمية الـ bucket** أعلاه.
-- يضيف **تعليق لزق** لكل من **`unified`** و `dev` و `staging` و `prod`.
+- **Pull Request:** يعلّق على الـ PR (sticky) لكل stack: `unified`، `dev`، `staging`، `prod`.
+- **Run workflow:** نفس الـ plans بدون PR؛ الملخص في **Summary** للـ run + ملفات **artifacts**.
 
 **إعداد:**
 

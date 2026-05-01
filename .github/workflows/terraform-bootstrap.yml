@@ -31,6 +31,18 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
+      - name: Check required secrets
+        run: |
+          if [ -z "${{ secrets.TF_ROOT_STATE_BUCKET }}" ] || [ -z "${{ secrets.TF_ROOT_STATE_LOCK_TABLE }}" ]; then
+            echo "::error::Add Secrets: TF_ROOT_STATE_BUCKET and TF_ROOT_STATE_LOCK_TABLE (root state for bootstrap)."
+            exit 1
+          fi
+          if [ -z "${{ secrets.AWS_TERRAFORM_APPLY_ROLE_ARN }}" ]; then
+            echo "::error::Add Secret: AWS_TERRAFORM_APPLY_ROLE_ARN (GitHub OIDC role)."
+            exit 1
+          fi
+          echo "Secrets present (values not shown)."
+
       - id: awsregion
         env:
           AWS_REGION: ${{ vars.AWS_REGION }}
@@ -57,10 +69,6 @@ jobs:
           ROOT_TABLE: ${{ secrets.TF_ROOT_STATE_LOCK_TABLE }}
           REGION: ${{ steps.awsregion.outputs.value }}
         run: |
-          if [ -z "$ROOT_BUCKET" ] || [ -z "$ROOT_TABLE" ]; then
-            echo "Set GitHub Secrets: TF_ROOT_STATE_BUCKET and TF_ROOT_STATE_LOCK_TABLE"
-            exit 1
-          fi
           cat > backend.ci.hcl <<EOF
           bucket         = "${ROOT_BUCKET}"
           key            = "bootstrap/${{ inputs.environment }}/terraform.tfstate"
