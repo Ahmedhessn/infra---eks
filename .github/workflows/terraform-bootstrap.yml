@@ -11,6 +11,7 @@ on:
         type: choice
         required: true
         options:
+          - unified
           - dev
           - staging
           - prod

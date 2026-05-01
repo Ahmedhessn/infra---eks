@@ -1,4 +1,4 @@
-## Manual apply + optional signal to k8s---eks (EKS dev/staging only).
+## Manual apply + optional signal to k8s---eks (EKS: dev / staging / **unified**; not prod self-managed).
 ## Protect `production` (and optionally `staging`) via GitHub Environments → required reviewers.
 name: Terraform apply
 
@@ -10,6 +10,7 @@ on:
         type: choice
         required: true
         options:
+          - unified
           - dev
           - staging
           - prod
@@ -18,7 +19,7 @@ on:
         type: boolean
         default: false
       notify_k8s_repo:
-        description: "Dispatch deploy to k8s---eks (EKS only; skipped for prod self-managed)"
+        description: "Dispatch deploy to k8s---eks (EKS only; skipped for prod; use with unified/dev/staging)"
         type: boolean
         default: false
 
@@ -44,6 +45,10 @@ jobs:
         id: ctx
         run: |
           case "${{ inputs.environment }}" in
+            unified)
+              echo "workdir=live/unified/k8s" >> "$GITHUB_OUTPUT"
+              echo "state_key=unified/k8s/terraform.tfstate" >> "$GITHUB_OUTPUT"
+              ;;
             dev)
               echo "workdir=live/dev/k8s" >> "$GITHUB_OUTPUT"
               echo "state_key=dev/k8s/terraform.tfstate" >> "$GITHUB_OUTPUT"

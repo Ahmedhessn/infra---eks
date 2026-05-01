@@ -1,0 +1,14 @@
+apiVersion: karpenter.k8s.aws/v1beta1
+kind: EC2NodeClass
+metadata:
+  name: default
+spec:
+  amiFamily: AL2023
+  ## After `terraform apply`: terraform output -json karpenter | jq -r .value.node_role_name
+  role: k8s-emad-temp-replace-from-terraform-output
+  subnetSelectorTerms:
+    - tags:
+        karpenter.sh/discovery: k8s-emad-128768042813-eks
+  securityGroupSelectorTerms:
+    - tags:
+        karpenter.sh/discovery: k8s-emad-128768042813-eks

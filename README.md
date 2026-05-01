@@ -1,6 +1,6 @@
 # infra---eks
 
-Terraform (VPC، EKS لـ dev/staging، ECR، …) + **prod** على شكل self-managed K8s في `live/prod/k8s`.
+Terraform: **كلاستر EKS واحد (موحّد)** عبر AZين في `live/unified`، أو نموذج قديم منفصل لـ dev/staging؛ **prod** اختياريًا self-managed في `live/prod/k8s`.
 
 - التطبيق: [src---eks](https://github.com/Ahmedhessn/src---eks)
 - الـ Kubernetes: [k8s---eks](https://github.com/Ahmedhessn/k8s---eks)
@@ -9,12 +9,11 @@ Terraform (VPC، EKS لـ dev/staging، ECR، …) + **prod** على شكل self
 
 | المسار | الوصف |
 |--------|--------|
-| `live/dev/bootstrap` + `live/dev/k8s` | Dev + **EKS** |
-| `live/staging/bootstrap` + `live/staging/k8s` | Staging + **EKS** (مرة واحدة: طبّق bootstrap ثم k8s) |
-| `live/prod/bootstrap` + `live/prod/k8s` | Prod (نموذج **self-managed** — ليس نفس شكل EKS) |
+| **`live/unified/bootstrap` + `live/unified/k8s`** | **EKS واحد** + VPC على **AZين** + ECR مشتركة. dev/staging/prod = **namespaces** داخل نفس الكلاستر. |
+| `live/dev/...` ، `live/staging/...` | نموذج قديم (EKS منفصل لكل بيئة). |
+| `live/prod/...` | **self-managed** على EC2 (ليس EKS) في الكود الحالي. |
 
-أسماء الـ state تتبع الوحدة `modules/remote_state`:  
-`<project>-<env>-tf-state` و `<project>-<env>-tf-locks`.
+الـ state: `<project>-<env>-tf-state`. للموحّد: env = **`unified`**. اسم الكلاستر: **`<project>-eks`** (مثال: `k8s-emad-128768042813-eks`).
 
 ## البناء من Pipeline (ترتيب التنفيذ)
 
@@ -28,12 +27,11 @@ Terraform (VPC، EKS لـ dev/staging، ECR، …) + **prod** على شكل self
    - `TF_ROOT_STATE_LOCK_TABLE` — اسم جدول الـ locks  
    - `AWS_TERRAFORM_APPLY_ROLE_ARN` — دور OIDC (نفس المستخدم لـ apply)
 
-3. **Actions → Terraform bootstrap → Run workflow:** اختر `dev`، فعّل **apply** عند الجاهزية.  
-   يُنشئ: `…-dev-tf-state` و `…-dev-tf-locks` للـ stacks اللي بعد كده.
+3. **Actions → Terraform bootstrap → Run workflow:** اختر **`unified`** (أو `dev` لو ما زلت على النموذج القديم)، ثم **apply** عند الجاهزية.
 
-4. انسخ من **output** الـ bucket/table إلى `live/dev/k8s/backend.hcl` (أو اترك الـ CI يولّدها في **Terraform apply** لأن الـ workflow يبني `backend.ci.hcl` تلقائيًا).
+4. انسخ من **output** إلى `live/unified/k8s/backend.hcl` أو استخدم **Terraform apply** من GitHub (يولّد `backend.ci.hcl` تلقائيًا).
 
-5. **Actions → Terraform apply:** نفس البيئة `dev`، **apply** لبناء **VPC + EKS + …**.
+5. **Actions → Terraform apply:** اختر **`unified`** و **apply** لبناء **VPC (2 AZ) + EKS واحد + ECR**.
 
 ## GitHub Actions
 
@@ -42,7 +40,7 @@ Terraform (VPC، EKS لـ dev/staging، ECR، …) + **prod** على شكل self
 Workflow: `.github/workflows/terraform-pr.yml`
 
 - يولّد `backend.ci.hcl` تلقائياً من **نفس تسمية الـ bucket** أعلاه.
-- يضيف/يحدّث **تعليق لزق على الـ PR** لكل من `dev` و `staging` و `prod` (sticky header لكل بيئة).
+- يضيف **تعليق لزق** لكل من **`unified`** و `dev` و `staging` و `prod`.
 
 **إعداد:**
 

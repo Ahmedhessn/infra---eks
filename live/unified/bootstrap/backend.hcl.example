@@ -1,0 +1,7 @@
+## Same root bucket + lock table as other bootstrap stacks (TF_ROOT_STATE_* secrets in CI).
+
+bucket         = "k8s-emad-128768042813-tf-root"
+key            = "bootstrap/unified/terraform.tfstate"
+region         = "us-east-1"
+dynamodb_table = "k8s-emad-128768042813-tf-root-locks"
+encrypt        = true

@@ -1,0 +1,7 @@
+## After unified/bootstrap apply, fill from outputs (same pattern as dev).
+
+bucket         = "REPLACE_ME"
+key            = "unified/k8s/terraform.tfstate"
+region         = "us-east-1"
+dynamodb_table = "REPLACE_ME"
+encrypt        = true

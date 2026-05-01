@@ -1,4 +1,4 @@
-## PR plan → sticky comment per environment (dev / staging / prod).
+## PR plan → sticky comment per stack (includes **unified** single EKS + legacy stacks).
 ## Requires: GitHub OIDC IAM role + remote state bucket/lock already bootstrapped per env.
 name: Terraform PR plan
 
@@ -28,6 +28,9 @@ jobs:
       fail-fast: false
       matrix:
         include:
+          - env: unified
+            workdir: live/unified/k8s
+            state_key: unified/k8s/terraform.tfstate
           - env: dev
             workdir: live/dev/k8s
             state_key: dev/k8s/terraform.tfstate
