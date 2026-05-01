@@ -88,7 +88,11 @@ jobs:
       - name: Terraform init
         id: init
         working-directory: ${{ matrix.workdir }}
-        run: terraform init -backend-config=backend.ci.hcl -input=false
+        run: |
+          set +e
+          LOG="${{ runner.temp }}/init-${{ matrix.env }}.log"
+          terraform init -backend-config=backend.ci.hcl -input=false 2>&1 | tee "$LOG"
+          exit ${PIPESTATUS[0]}
         continue-on-error: true
 
       - name: Terraform plan
@@ -106,11 +110,25 @@ jobs:
           PLAN_OUTCOME: ${{ steps.plan.outcome }}
         run: |
           FILE="${{ runner.temp }}/comment-${{ matrix.env }}.md"
+          LOG="${{ runner.temp }}/init-${{ matrix.env }}.log"
           {
             echo "### Terraform plan — \`${{ matrix.env }}\`"
             echo ""
             echo "**Stack:** \`${{ matrix.workdir }}\` · **init:** ${INIT_OUTCOME} · **plan:** ${PLAN_OUTCOME}"
+            if [ "${INIT_OUTCOME}" != "success" ]; then
+              echo ""
+              echo "> **If you see S3/backend errors:** run **Terraform bootstrap** for \`${{ matrix.env }}\` first (creates \`<prefix>-${{ matrix.env }}-tf-state\` + lock table), then re-run this workflow."
+            fi
             echo ""
+            if [ "${INIT_OUTCOME}" != "success" ] && [ -f "$LOG" ]; then
+              echo "<details><summary>terraform init log (last 120 lines)</summary>"
+              echo ""
+              echo '```text'
+              tail -n 120 "$LOG"
+              echo '```'
+              echo ""
+              echo "</details>"
+            fi
             echo "<details><summary>Expand plan</summary>"
             echo ""
             echo '```hcl'
