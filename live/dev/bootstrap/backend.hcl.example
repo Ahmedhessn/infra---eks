@@ -1,0 +1,10 @@
+## Root state for the *bootstrap* stack only (S3 + DynamoDB that hold env tf-state).
+## Create this bucket + lock table ONCE in AWS (Console or CLI), globally unique names.
+## Then: terraform init -backend-config=backend.hcl
+## Migrating from old local state: add -migrate-state to init once.
+
+bucket         = "k8s-emad-128768042813-tf-root"
+key            = "bootstrap/dev/terraform.tfstate"
+region         = "us-east-1"
+dynamodb_table = "k8s-emad-128768042813-tf-root-locks"
+encrypt        = true

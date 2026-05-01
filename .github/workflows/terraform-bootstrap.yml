@@ -1,0 +1,82 @@
+## Apply bootstrap stacks (S3 + DynamoDB per env) from GitHub Actions.
+## Prerequisite: create ONE "root" S3 bucket + DynamoDB lock table (see live/dev/bootstrap/backend.hcl.example),
+## then set repository Secrets below. Keys under the same bucket separate dev/staging/prod bootstrap state.
+name: Terraform bootstrap
+
+on:
+  workflow_dispatch:
+    inputs:
+      environment:
+        description: "Which bootstrap stack"
+        type: choice
+        required: true
+        options:
+          - dev
+          - staging
+          - prod
+      run_apply:
+        description: "Run apply (unchecked = plan only)"
+        type: boolean
+        default: false
+
+permissions:
+  contents: read
+  id-token: write
+
+jobs:
+  bootstrap:
+    runs-on: ubuntu-latest
+    environment: ${{ inputs.environment == 'prod' && 'production' || inputs.environment }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - id: awsregion
+        env:
+          AWS_REGION: ${{ vars.AWS_REGION }}
+        run: echo "value=${AWS_REGION:-us-east-1}" >> "$GITHUB_OUTPUT"
+
+      - id: ctx
+        run: |
+          echo "workdir=live/${{ inputs.environment }}/bootstrap" >> "$GITHUB_OUTPUT"
+
+      - uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: ${{ secrets.AWS_TERRAFORM_APPLY_ROLE_ARN }}
+          aws-region: ${{ steps.awsregion.outputs.value }}
+
+      - uses: hashicorp/setup-terraform@v3
+        with:
+          terraform_version: "1.9.8"
+          terraform_wrapper: false
+
+      - name: Write bootstrap backend (root bucket)
+        working-directory: ${{ steps.ctx.outputs.workdir }}
+        env:
+          ROOT_BUCKET: ${{ secrets.TF_ROOT_STATE_BUCKET }}
+          ROOT_TABLE: ${{ secrets.TF_ROOT_STATE_LOCK_TABLE }}
+          REGION: ${{ steps.awsregion.outputs.value }}
+        run: |
+          if [ -z "$ROOT_BUCKET" ] || [ -z "$ROOT_TABLE" ]; then
+            echo "Set GitHub Secrets: TF_ROOT_STATE_BUCKET and TF_ROOT_STATE_LOCK_TABLE"
+            exit 1
+          fi
+          cat > backend.ci.hcl <<EOF
+          bucket         = "${ROOT_BUCKET}"
+          key            = "bootstrap/${{ inputs.environment }}/terraform.tfstate"
+          region         = "${REGION}"
+          dynamodb_table = "${ROOT_TABLE}"
+          encrypt        = true
+          EOF
+
+      - name: Terraform init
+        working-directory: ${{ steps.ctx.outputs.workdir }}
+        run: terraform init -backend-config=backend.ci.hcl -input=false
+
+      - name: Terraform plan
+        working-directory: ${{ steps.ctx.outputs.workdir }}
+        run: terraform plan -no-color -input=false -out=tfplan
+
+      - name: Terraform apply
+        if: inputs.run_apply
+        working-directory: ${{ steps.ctx.outputs.workdir }}
+        run: terraform apply -no-color -input=false -auto-approve tfplan

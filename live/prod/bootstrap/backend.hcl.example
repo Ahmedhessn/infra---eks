@@ -1,0 +1,7 @@
+## Root state for bootstrap (prod).
+
+bucket         = "k8s-emad-128768042813-tf-root"
+key            = "bootstrap/prod/terraform.tfstate"
+region         = "us-east-1"
+dynamodb_table = "k8s-emad-128768042813-tf-root-locks"
+encrypt        = true

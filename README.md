@@ -16,6 +16,25 @@ Terraform (VPC، EKS لـ dev/staging، ECR، …) + **prod** على شكل self
 أسماء الـ state تتبع الوحدة `modules/remote_state`:  
 `<project>-<env>-tf-state` و `<project>-<env>-tf-locks`.
 
+## البناء من Pipeline (ترتيب التنفيذ)
+
+1. **مرة واحدة في AWS:** أنشئ **bucket + DynamoDB** لحفظ **state الخاص بـ bootstrap** (مش نفس bucket الـ env — ده “root” للـ CI فقط).  
+   مثال أسماء (غيّرها لو الـ bucket مش متاح عالميًا):  
+   `k8s-emad-128768042813-tf-root` + `k8s-emad-128768042813-tf-root-locks`  
+   انسخ القيم من `live/dev/bootstrap/backend.hcl.example`.
+
+2. في **GitHub → infra---eks → Secrets** أضف:
+   - `TF_ROOT_STATE_BUCKET` — اسم الـ root bucket  
+   - `TF_ROOT_STATE_LOCK_TABLE` — اسم جدول الـ locks  
+   - `AWS_TERRAFORM_APPLY_ROLE_ARN` — دور OIDC (نفس المستخدم لـ apply)
+
+3. **Actions → Terraform bootstrap → Run workflow:** اختر `dev`، فعّل **apply** عند الجاهزية.  
+   يُنشئ: `…-dev-tf-state` و `…-dev-tf-locks` للـ stacks اللي بعد كده.
+
+4. انسخ من **output** الـ bucket/table إلى `live/dev/k8s/backend.hcl` (أو اترك الـ CI يولّدها في **Terraform apply** لأن الـ workflow يبني `backend.ci.hcl` تلقائيًا).
+
+5. **Actions → Terraform apply:** نفس البيئة `dev`، **apply** لبناء **VPC + EKS + …**.
+
 ## GitHub Actions
 
 ### 1) PR → تعليق فيه `terraform plan` (لكل بيئة)
