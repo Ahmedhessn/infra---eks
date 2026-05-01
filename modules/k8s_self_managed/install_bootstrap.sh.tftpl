@@ -1,0 +1,49 @@
+## WHY: This fragment is inlined into user_data_master / user_data_worker.
+## WHAT: Install containerd, sysctl rules, and pinned Kubernetes packages.
+## HOW: Keep heredoc terminators at column 0 so bash recognizes them. (A Terraform <<-EOF
+##     around the whole script leaves indented closers like "  SYSCTL" and breaks <<SYSCTL.)
+
+export DEBIAN_FRONTEND=noninteractive
+
+## WHY: Private VPC subnets often have no IPv6; apt tries AAAA first and errors obscurely.
+mkdir -p /etc/apt/apt.conf.d
+printf 'Acquire::ForceIPv4 "true";\n' > /etc/apt/apt.conf.d/99force-ipv4
+
+## WHY: NAT/default route can be unavailable for a short window right after the instance boots.
+updated=""
+for attempt in $(seq 1 24); do
+  if apt-get update -y; then
+    updated="1"
+    break
+  fi
+  echo "apt-get update failed (attempt $${attempt}/24), retrying in 10s..."
+  sleep 10
+done
+if [ -z "$${updated}" ]; then
+  echo "apt-get update failed after retries; check NAT gateway and private subnet 0.0.0.0/0 route."
+  exit 1
+fi
+
+apt-get install -y apt-transport-https ca-certificates curl gnupg lsb-release jq awscli
+
+apt-get install -y containerd
+mkdir -p /etc/containerd
+containerd config default | tee /etc/containerd/config.toml >/dev/null
+systemctl restart containerd
+systemctl enable containerd
+
+modprobe br_netfilter
+cat >/etc/sysctl.d/99-kubernetes-cri.conf <<'SYSCTL'
+net.bridge.bridge-nf-call-iptables  = 1
+net.ipv4.ip_forward                 = 1
+net.bridge.bridge-nf-call-ip6tables = 1
+SYSCTL
+sysctl --system
+
+mkdir -p /etc/apt/keyrings
+curl -fsSL https://pkgs.k8s.io/core:/stable:/v${K8S_MAJOR_MINOR}/deb/Release.key | gpg --dearmor -o /etc/apt/keyrings/kubernetes-apt-keyring.gpg
+echo "deb [signed-by=/etc/apt/keyrings/kubernetes-apt-keyring.gpg] https://pkgs.k8s.io/core:/stable:/v${K8S_MAJOR_MINOR}/deb/ /" > /etc/apt/sources.list.d/kubernetes.list
+apt-get update -y
+apt-get install -y kubelet=${K8S_FULL}-* kubeadm=${K8S_FULL}-* kubectl=${K8S_FULL}-*
+apt-mark hold kubelet kubeadm kubectl
+systemctl enable kubelet

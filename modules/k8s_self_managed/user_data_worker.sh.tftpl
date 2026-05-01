@@ -1,0 +1,23 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+export K8S_MAJOR_MINOR="${K8S_MAJOR_MINOR}"
+export K8S_FULL="${K8S_FULL}"
+export JOIN_PARAMETER="${JOIN_PARAMETER}"
+
+${INSTALL_SCRIPT}
+
+# Wait for join command in SSM Parameter Store, then join.
+for i in $(seq 1 60); do
+  set +e
+  JOIN_CMD="$(aws ssm get-parameter --name "$JOIN_PARAMETER" --query "Parameter.Value" --output text 2>/dev/null)"
+  rc=$?
+  set -e
+  if [ $rc -eq 0 ] && [ -n "$JOIN_CMD" ] && [ "$JOIN_CMD" != "None" ]; then
+    break
+  fi
+  sleep 10
+done
+
+bash -c "$JOIN_CMD"
+

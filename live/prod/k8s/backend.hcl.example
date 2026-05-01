@@ -1,0 +1,9 @@
+## Backend config (S3) for the prod stack.
+## Same as dev, but with a different key (prod/k8s) and using prod bootstrap bucket/table outputs.
+
+bucket         = "REPLACE_ME_AFTER_BOOTSTRAP"
+key            = "prod/k8s/terraform.tfstate"
+region         = "us-east-1"
+dynamodb_table = "REPLACE_ME_AFTER_BOOTSTRAP"
+encrypt        = true
+

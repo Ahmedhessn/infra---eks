@@ -1,0 +1,15 @@
+apiVersion: karpenter.k8s.aws/v1beta1
+kind: EC2NodeClass
+metadata:
+  name: default
+spec:
+  amiFamily: AL2023
+  # NOTE: Karpenter expects the IAM Role *name* (not ARN, not instance-profile).
+  role: k8s-self-managed-5034591257-karp-node-20260426161440639500000001
+  subnetSelectorTerms:
+    - tags:
+        karpenter.sh/discovery: k8s-self-managed-503459125797-dev-eks
+  securityGroupSelectorTerms:
+    - tags:
+        karpenter.sh/discovery: k8s-self-managed-503459125797-dev-eks
+

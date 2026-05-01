@@ -1,0 +1,24 @@
+## ============================
+## Backend config (S3 backend)
+## ============================
+## WHY: This stores this stack's state in S3 instead of your local machine.
+## WHAT: This config file is read by Terraform once during:
+##      `terraform init -backend-config=backend.hcl`
+## HOW: After running `live/dev/bootstrap`, copy the bucket/table outputs into this file.
+
+## WHAT: S3 bucket that stores the tfstate (from dev bootstrap output).
+bucket         = "REPLACE_ME_AFTER_BOOTSTRAP"
+
+## WHAT: The object key (path) for the state file inside the same bucket.
+## WHY: Separate state per env/stack (dev/k8s) to avoid any overlap.
+key            = "dev/k8s/terraform.tfstate"
+
+## WHAT: Region where the bucket/lock table live.
+region         = "us-east-1"
+
+## WHAT: DynamoDB lock table (from dev bootstrap output).
+dynamodb_table = "REPLACE_ME_AFTER_BOOTSTRAP"
+
+## WHY: Encrypt state at rest in S3.
+encrypt        = true
+
