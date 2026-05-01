@@ -11,6 +11,7 @@ override.tf.json
 *_override.tf
 *_override.tf.json
 backend.hcl
+backend.ci.hcl
 *.pem
 *.key
 *-key.json

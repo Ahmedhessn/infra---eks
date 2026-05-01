@@ -1,0 +1,116 @@
+## Manual apply + optional signal to k8s---eks (EKS dev/staging only).
+## Protect `production` (and optionally `staging`) via GitHub Environments → required reviewers.
+name: Terraform apply
+
+on:
+  workflow_dispatch:
+    inputs:
+      environment:
+        description: "Target environment"
+        type: choice
+        required: true
+        options:
+          - dev
+          - staging
+          - prod
+      run_apply:
+        description: "Run terraform apply (no = plan only)"
+        type: boolean
+        default: false
+      notify_k8s_repo:
+        description: "Dispatch deploy to k8s---eks (EKS only; skipped for prod self-managed)"
+        type: boolean
+        default: false
+
+permissions:
+  contents: read
+  id-token: write
+
+jobs:
+  terraform:
+    runs-on: ubuntu-latest
+    environment: ${{ inputs.environment == 'prod' && 'production' || inputs.environment }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Resolve AWS region
+        id: awsregion
+        env:
+          AWS_REGION: ${{ vars.AWS_REGION }}
+        run: echo "value=${AWS_REGION:-us-east-1}" >> "$GITHUB_OUTPUT"
+
+      - name: Resolve stack paths
+        id: ctx
+        run: |
+          case "${{ inputs.environment }}" in
+            dev)
+              echo "workdir=live/dev/k8s" >> "$GITHUB_OUTPUT"
+              echo "state_key=dev/k8s/terraform.tfstate" >> "$GITHUB_OUTPUT"
+              ;;
+            staging)
+              echo "workdir=live/staging/k8s" >> "$GITHUB_OUTPUT"
+              echo "state_key=staging/k8s/terraform.tfstate" >> "$GITHUB_OUTPUT"
+              ;;
+            prod)
+              echo "workdir=live/prod/k8s" >> "$GITHUB_OUTPUT"
+              echo "state_key=prod/k8s/terraform.tfstate" >> "$GITHUB_OUTPUT"
+              ;;
+          esac
+
+      - name: Project prefix
+        id: pp
+        env:
+          TF_PROJECT_PREFIX: ${{ vars.TF_PROJECT_PREFIX }}
+        run: |
+          PREFIX="${TF_PROJECT_PREFIX:-k8s-self-managed-503459125797}"
+          echo "prefix=$PREFIX" >> "$GITHUB_OUTPUT"
+
+      - name: Configure AWS credentials (OIDC)
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: ${{ secrets.AWS_TERRAFORM_APPLY_ROLE_ARN }}
+          aws-region: ${{ steps.awsregion.outputs.value }}
+
+      - name: Setup Terraform
+        uses: hashicorp/setup-terraform@v3
+        with:
+          terraform_version: "1.9.8"
+          terraform_wrapper: false
+
+      - name: Write backend config (CI)
+        working-directory: ${{ steps.ctx.outputs.workdir }}
+        run: |
+          PREFIX="${{ steps.pp.outputs.prefix }}"
+          ENV="${{ inputs.environment }}"
+          REGION="${{ steps.awsregion.outputs.value }}"
+          cat > backend.ci.hcl <<EOF
+          bucket         = "${PREFIX}-${ENV}-tf-state"
+          key            = "${{ steps.ctx.outputs.state_key }}"
+          region         = "${REGION}"
+          dynamodb_table = "${PREFIX}-${ENV}-tf-locks"
+          encrypt        = true
+          EOF
+
+      - name: Terraform init
+        working-directory: ${{ steps.ctx.outputs.workdir }}
+        run: terraform init -backend-config=backend.ci.hcl -input=false
+
+      - name: Terraform plan
+        working-directory: ${{ steps.ctx.outputs.workdir }}
+        run: terraform plan -no-color -input=false -out=tfplan
+
+      - name: Terraform apply
+        if: inputs.run_apply
+        working-directory: ${{ steps.ctx.outputs.workdir }}
+        run: terraform apply -no-color -input=false -auto-approve tfplan
+
+      - name: Notify k8s repo (repository dispatch)
+        if: success() && inputs.run_apply && inputs.notify_k8s_repo && inputs.environment != 'prod'
+        uses: peter-evans/repository-dispatch@v3
+        with:
+          token: ${{ secrets.K8S_REPO_DISPATCH_TOKEN }}
+          repository: ${{ vars.K8S_MANIFESTS_REPO || 'Ahmedhessn/k8s---eks' }}
+          event-type: eks-infra-applied
+          client-payload: >-
+            {"environment":"${{ inputs.environment }}","region":"${{ steps.awsregion.outputs.value }}","project_prefix":"${{ steps.pp.outputs.prefix }}"}

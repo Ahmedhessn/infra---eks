@@ -1,0 +1,130 @@
+## PR plan → sticky comment per environment (dev / staging / prod).
+## Requires: GitHub OIDC IAM role + remote state bucket/lock already bootstrapped per env.
+name: Terraform PR plan
+
+on:
+  pull_request:
+    types: [opened, synchronize, reopened]
+    paths:
+      - "live/**"
+      - "modules/**"
+      - ".github/workflows/terraform-pr.yml"
+
+permissions:
+  contents: read
+  pull-requests: write
+  id-token: write
+
+concurrency:
+  group: terraform-pr-${{ github.event.repository.id }}-${{ github.event.pull_request.number }}
+  cancel-in-progress: true
+
+jobs:
+  plan:
+    ## Avoid running trusted AWS OIDC + state access on PRs from forks (secrets unavailable anyway).
+    if: github.event.pull_request.head.repo.full_name == github.repository
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - env: dev
+            workdir: live/dev/k8s
+            state_key: dev/k8s/terraform.tfstate
+          - env: staging
+            workdir: live/staging/k8s
+            state_key: staging/k8s/terraform.tfstate
+          - env: prod
+            workdir: live/prod/k8s
+            state_key: prod/k8s/terraform.tfstate
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Resolve AWS region
+        id: awsregion
+        env:
+          AWS_REGION: ${{ vars.AWS_REGION }}
+        run: echo "value=${AWS_REGION:-us-east-1}" >> "$GITHUB_OUTPUT"
+
+      - name: Project prefix
+        id: pp
+        env:
+          TF_PROJECT_PREFIX: ${{ vars.TF_PROJECT_PREFIX }}
+        run: |
+          PREFIX="${TF_PROJECT_PREFIX:-k8s-self-managed-503459125797}"
+          echo "prefix=$PREFIX" >> "$GITHUB_OUTPUT"
+
+      - name: Configure AWS credentials (OIDC)
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: ${{ secrets.AWS_TERRAFORM_PLAN_ROLE_ARN }}
+          aws-region: ${{ steps.awsregion.outputs.value }}
+
+      - name: Setup Terraform
+        uses: hashicorp/setup-terraform@v3
+        with:
+          terraform_version: "1.9.8"
+          terraform_wrapper: false
+
+      - name: Write backend config (CI)
+        working-directory: ${{ matrix.workdir }}
+        run: |
+          PREFIX="${{ steps.pp.outputs.prefix }}"
+          ENV="${{ matrix.env }}"
+          REGION="${{ steps.awsregion.outputs.value }}"
+          cat > backend.ci.hcl <<EOF
+          bucket         = "${PREFIX}-${ENV}-tf-state"
+          key            = "${{ matrix.state_key }}"
+          region         = "${REGION}"
+          dynamodb_table = "${PREFIX}-${ENV}-tf-locks"
+          encrypt        = true
+          EOF
+
+      - name: Terraform init
+        id: init
+        working-directory: ${{ matrix.workdir }}
+        run: terraform init -backend-config=backend.ci.hcl -input=false
+        continue-on-error: true
+
+      - name: Terraform plan
+        id: plan
+        if: steps.init.outcome == 'success'
+        working-directory: ${{ matrix.workdir }}
+        run: terraform plan -no-color -input=false -lock=false -out=tfplan
+        continue-on-error: true
+
+      - name: Build PR comment body
+        if: always()
+        working-directory: ${{ matrix.workdir }}
+        env:
+          INIT_OUTCOME: ${{ steps.init.outcome }}
+          PLAN_OUTCOME: ${{ steps.plan.outcome }}
+        run: |
+          FILE="${{ runner.temp }}/comment-${{ matrix.env }}.md"
+          {
+            echo "### Terraform plan — \`${{ matrix.env }}\`"
+            echo ""
+            echo "**Stack:** \`${{ matrix.workdir }}\` · **init:** ${INIT_OUTCOME} · **plan:** ${PLAN_OUTCOME}"
+            echo ""
+            echo "<details><summary>Expand plan</summary>"
+            echo ""
+            echo '```hcl'
+            if [ -f tfplan ]; then
+              terraform show -no-color tfplan | head -c 62000
+            else
+              echo "(no plan file — fix init/plan in Actions log)"
+            fi
+            echo '```'
+            echo ""
+            echo "</details>"
+          } > "$FILE"
+
+      - name: Post sticky PR comment
+        if: always()
+        uses: marocchino/sticky-pull-request-comment@v2
+        with:
+          header: terraform-plan-${{ matrix.env }}
+          path: ${{ runner.temp }}/comment-${{ matrix.env }}.md
+          number: ${{ github.event.pull_request.number }}
