@@ -291,6 +291,7 @@ output "karpenter" {
     controller_role_arn       = aws_iam_role.karpenter_controller.arn
     node_instance_profile_arn = aws_iam_instance_profile.karpenter_node.arn
     node_role_arn             = aws_iam_role.karpenter_node.arn
+    node_role_name            = aws_iam_role.karpenter_node.name
   }
 }
 

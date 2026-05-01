@@ -6,8 +6,8 @@ variable "aws_region" {
 
 variable "project" {
   type        = string
-  description = "WHY: Consistent naming prefix for resources. WHAT: Prefix used in resource names (e.g., k8s-self-managed)."
-  default     = "k8s-self-managed-503459125797"
+  description = "WHY: Consistent naming prefix for resources. WHAT: Prefix used in resource names."
+  default     = "k8s-Emad-128768042813"
 }
 
 variable "environment" {
