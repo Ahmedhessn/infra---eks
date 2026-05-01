@@ -63,7 +63,7 @@ jobs:
         env:
           TF_PROJECT_PREFIX: ${{ vars.TF_PROJECT_PREFIX }}
         run: |
-          PREFIX="${TF_PROJECT_PREFIX:-k8s-Emad-128768042813}"
+          PREFIX="${TF_PROJECT_PREFIX:-k8s-emad-128768042813}"
           echo "prefix=$PREFIX" >> "$GITHUB_OUTPUT"
 
       - name: Configure AWS credentials (OIDC)

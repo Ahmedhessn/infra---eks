@@ -9,7 +9,7 @@ spec:
   role: k8s-emad-temp-replace-from-terraform-output
   subnetSelectorTerms:
     - tags:
-        karpenter.sh/discovery: k8s-Emad-128768042813-staging-eks
+        karpenter.sh/discovery: k8s-emad-128768042813-staging-eks
   securityGroupSelectorTerms:
     - tags:
-        karpenter.sh/discovery: k8s-Emad-128768042813-staging-eks
+        karpenter.sh/discovery: k8s-emad-128768042813-staging-eks

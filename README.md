@@ -29,7 +29,7 @@ Workflow: `.github/workflows/terraform-pr.yml`
 
 1. **OIDC:** دور IAM يثق في `token.actions.githubusercontent.com` ويحدد repo هذا فقط.
 2. **Secret:** `AWS_TERRAFORM_PLAN_ROLE_ARN` — ARN الدور (صلاحيات قراءة/كتابة state + تنفيذ plan على الموارد).
-3. **Variable (اختياري):** `TF_PROJECT_PREFIX` — افتراضيًا `k8s-Emad-128768042813`.
+3. **Variable (اختياري):** `TF_PROJECT_PREFIX` — افتراضيًا `k8s-emad-128768042813` (أحرف صغيرة؛ متطلب S3).
 4. **Variable (اختياري):** `AWS_REGION` — افتراضيًا `us-east-1`.
 
 **ملاحظة:** الـ plan على PRs من **نفس المستودع** فقط (لأسباب أمنية).

@@ -4,8 +4,8 @@
 
 resource "aws_s3_bucket" "tf_state" {
   ## WHAT: Dedicated bucket per env/project for Terraform state.
-  ## HOW: Name derived from `var.project` so `dev` and `prod` can be separated cleanly.
-  bucket = "${var.project}-tf-state"
+  ## HOW: S3 bucket names must be lowercase (DNS rules).
+  bucket = lower("${var.project}-tf-state")
 }
 
 resource "aws_s3_bucket_versioning" "tf_state" {
